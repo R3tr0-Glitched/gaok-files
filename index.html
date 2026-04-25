@@ -130,7 +130,7 @@ button {
 
 </div>
 
-<!-- 🔍 ZOOM MODAL -->
+<!-- ZOOM -->
 <div id="imgModal" style="
   display:none;
   position:fixed;
@@ -158,12 +158,11 @@ import {
   getFirestore,
   collection,
   addDoc,
-  getDocs,
   deleteDoc,
   doc,
   updateDoc,
-  query,
-  onSnapshot
+  onSnapshot,
+  query
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 import {
@@ -173,7 +172,7 @@ import {
   onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
-/* 🔥 FIREBASE (UNCHANGED) */
+/* FIREBASE (UNCHANGED) */
 const firebaseConfig = {
   apiKey: "AIzaSyAlsIWQNJwjhofD07hyrEqSSJCI2uqfBvY",
   authDomain: "gaok-89901.firebaseapp.com",
@@ -203,8 +202,6 @@ onAuthStateChanged(auth, (user) => {
 
   document.getElementById("adminBox").style.display =
     user?.uid === ADMIN_UID ? "block" : "none";
-
-  loadPosts();
 });
 
 /* LOGIN */
@@ -219,29 +216,14 @@ document.getElementById("loginBtn").onclick = async () => {
 };
 
 /* CATEGORIES */
-function listenCategories() {
-  const q = query(collection(db, "categories"));
+onSnapshot(query(collection(db, "categories")), (snap) => {
+  categories = snap.docs.map(d => d.data().name);
 
-  onSnapshot(q, (snap) => {
-    categories = [];
-
-    snap.forEach(d => {
-      categories.push(d.data().name);
-    });
-
-    renderCats();
-  });
-}
-
-listenCategories();
-
-function renderCats() {
   catSelect.innerHTML = categories.map(c => `<option>${c}</option>`).join("");
-
   filterSelect.innerHTML =
     `<option value="">All</option>` +
     categories.map(c => `<option value="${c}">${c}</option>`).join("");
-}
+});
 
 /* CREATE CATEGORY */
 window.createCategory = async () => {
@@ -269,19 +251,18 @@ window.createPost = async () => {
     createdAt: Date.now(),
     likes: 0
   });
-
-  loadPosts();
 };
 
-/* LOAD POSTS */
-window.loadPosts = async () => {
-  const postsDiv = document.getElementById("posts");
+/* 🔥 REAL-TIME POSTS (FIXED) */
+const postsDiv = document.getElementById("posts");
+
+onSnapshot(query(collection(db, "posts")), (snap) => {
   postsDiv.innerHTML = "";
 
-  const snap = await getDocs(collection(db, "posts"));
+  let posts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  posts.sort((a, b) => b.createdAt - a.createdAt);
 
-  snap.forEach(d => {
-    const p = d.data();
+  posts.forEach(p => {
     const imgs = p.images || [];
     const isAdmin = currentUser?.uid === ADMIN_UID;
 
@@ -302,46 +283,42 @@ window.loadPosts = async () => {
 
       <div>
         ❤️ ${p.likes || 0}
-        <button class="like" onclick="likePost('${d.id}', ${p.likes || 0})">Like</button>
+        <button class="like" onclick="likePost('${p.id}', ${p.likes || 0})">Like</button>
 
         ${isAdmin ? `
-          <button class="edit" onclick="editPost('${d.id}')">Edit</button>
-          <button class="danger" onclick="deletePost('${d.id}')">Delete</button>
-          <button class="primary" onclick="setCategory('${d.id}')">Set Category</button>
+          <button class="edit" onclick="editPost('${p.id}')">Edit</button>
+          <button class="danger" onclick="deletePost('${p.id}')">Delete</button>
+          <button class="primary" onclick="setCategory('${p.id}')">Set Category</button>
         ` : ""}
       </div>
     `;
 
     postsDiv.appendChild(div);
   });
-};
+});
 
 /* ACTIONS */
 window.likePost = async (id, likes) => {
   await updateDoc(doc(db, "posts", id), { likes: likes + 1 });
-  loadPosts();
 };
 
 window.deletePost = async (id) => {
   await deleteDoc(doc(db, "posts", id));
-  loadPosts();
 };
 
 window.editPost = async (id) => {
   const text = prompt("Edit:");
   if (!text) return;
   await updateDoc(doc(db, "posts", id), { text });
-  loadPosts();
 };
 
 window.setCategory = async (id) => {
   const cat = prompt("Category:");
   if (!cat) return;
   await updateDoc(doc(db, "posts", id), { category: cat });
-  loadPosts();
 };
 
-/* 🔍 ZOOM */
+/* ZOOM FIX */
 const modal = document.getElementById("imgModal");
 const modalImg = document.getElementById("modalImg");
 
@@ -359,8 +336,6 @@ document.getElementById("closeModal").onclick = () => {
 modal.onclick = (e) => {
   if (e.target === modal) modal.style.display = "none";
 };
-
-loadPosts();
 </script>
 
 </body>
