@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Retro Forum</title>
+
+<style>
+body {
+  margin: 0;
+  font-family: Arial;
+  background: #121212;
+  color: white;
+}
+
+header {
+  padding: 15px;
+  background: #1f1f1f;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.container {
+  max-width: 700px;
+  margin: auto;
+  padding: 20px;
+}
+
+.post-box {
+  background: #1e1e1e;
+  padding: 15px;
+  border-radius: 12px;
+  margin-bottom: 20px;
+}
+
+input, textarea {
+  width: 100%;
+  margin-top: 10px;
+  padding: 10px;
+  border-radius: 8px;
+  border: none;
+  background: #2a2a2a;
+  color: white;
+}
+
+button {
+  margin-top: 10px;
+  padding: 10px;
+  border: none;
+  border-radius: 8px;
+  background: #5865f2;
+  color: white;
+  cursor: pointer;
+}
+
+.post {
+  background: #1e1e1e;
+  padding: 15px;
+  border-radius: 12px;
+  margin-bottom: 15px;
+}
+
+.post img {
+  max-width: 100%;
+  margin-top: 10px;
+  border-radius: 10px;
+}
+</style>
+</head>
+
+<body>
+
+<header>
+  <h3>💬 Retro Forum</h3>
+  <button id="loginBtn">Login</button>
+</header>
+
+<div class="container">
+
+  <!-- ADMIN PANEL -->
+  <div id="adminBox" class="post-box" style="display:none;">
+    <h3>👑 Create Post</h3>
+    <textarea id="text" placeholder="Write something..."></textarea>
+    <input id="image" placeholder="Image URL (optional)">
+    <button onclick="createPost()">Post</button>
+  </div>
+
+  <!-- POSTS -->
+  <div id="posts"></div>
+
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, collection, addDoc, getDocs, query, orderBy } 
+from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+import { 
+  getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged 
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+
+
+// 🔥 YOUR FIREBASE CONFIG
+const firebaseConfig = {
+  apiKey: "AIzaSyAlsIWQNJwjhofD07hyrEqSSJCI2uqfBvY",
+  authDomain: "gaok-89901.firebaseapp.com",
+  projectId: "gaok-89901",
+  storageBucket: "gaok-89901.firebasestorage.app",
+  messagingSenderId: "287365042202",
+  appId: "1:287365042202:web:1c0dc4a94b37f395d981a3",
+  measurementId: "G-4MD6JT6F2K"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const auth = getAuth(app);
+
+// 👑 ADMIN UID
+const ADMIN_UID = "wOtvS062McPzHF5CpR1p9Loh4QW2";
+
+const loginBtn = document.getElementById("loginBtn");
+const adminBox = document.getElementById("adminBox");
+const postsDiv = document.getElementById("posts");
+
+// LOGIN / LOGOUT
+loginBtn.onclick = async () => {
+  if (auth.currentUser) {
+    await signOut(auth);
+  } else {
+    const email = prompt("Email:");
+    const pass = prompt("Password:");
+    await signInWithEmailAndPassword(auth, email, pass);
+  }
+};
+
+// AUTH STATE
+onAuthStateChanged(auth, (user) => {
+  if (user) {
+    loginBtn.innerText = "Logout";
+
+    if (user.uid === ADMIN_UID) {
+      adminBox.style.display = "block";
+    }
+  } else {
+    loginBtn.innerText = "Login";
+    adminBox.style.display = "none";
+  }
+});
+
+// CREATE POST (ADMIN ONLY)
+window.createPost = async () => {
+  const user = auth.currentUser;
+  if (!user || user.uid !== ADMIN_UID) return;
+
+  const text = document.getElementById("text").value;
+  const image = document.getElementById("image").value;
+
+  await addDoc(collection(db, "posts"), {
+    text,
+    image,
+    createdAt: Date.now()
+  });
+
+  loadPosts();
+};
+
+// LOAD POSTS
+async function loadPosts() {
+  postsDiv.innerHTML = "";
+
+  const q = query(collection(db, "posts"), orderBy("createdAt", "desc"));
+  const snap = await getDocs(q);
+
+  snap.forEach(doc => {
+    const data = doc.data();
+
+    const div = document.createElement("div");
+    div.className = "post";
+
+    div.innerHTML = `
+      <p>${data.text}</p>
+      ${data.image ? `<img src="${data.image}">` : ""}
+    `;
+
+    postsDiv.appendChild(div);
+  });
+}
+
+loadPosts();
+</script>
+
+</body>
+</html>
