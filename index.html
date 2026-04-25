@@ -35,10 +35,6 @@ header {
   margin-bottom: 12px;
 }
 
-.post small {
-  opacity: 0.6;
-}
-
 .panel {
   background: #171a22;
   border: 1px solid #232634;
@@ -47,7 +43,7 @@ header {
   margin-bottom: 15px;
 }
 
-input, textarea {
+input, textarea, select {
   width: 100%;
   margin-top: 10px;
   padding: 10px;
@@ -71,12 +67,6 @@ button {
 .edit { background: #f6a200; color: black; }
 .like { background: #2a2f3d; color: white; }
 
-#search {
-  width: 100%;
-  margin-bottom: 15px;
-}
-
-/* IMAGE GRID */
 .img-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
@@ -90,43 +80,15 @@ button {
   object-fit: cover;
   border-radius: 10px;
   cursor: pointer;
-  transition: 0.2s;
 }
 
-.img-grid img:hover {
-  transform: scale(1.04);
-}
-
-/* MODAL */
-.modal {
-  display: none;
-  position: fixed;
-  z-index: 999;
-  left: 0;
-  top: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0,0,0,0.9);
-  justify-content: center;
-  align-items: center;
-}
-
-.modal img {
-  max-width: 90%;
-  max-height: 90%;
-}
-
-.modal.show {
-  display: flex;
-}
-
-#closeModal {
-  position: absolute;
-  top: 20px;
-  right: 30px;
-  font-size: 30px;
-  cursor: pointer;
-  color: white;
+.cat {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 8px;
+  background: #2a2f3d;
+  font-size: 12px;
+  margin-left: 6px;
 }
 </style>
 </head>
@@ -145,32 +107,73 @@ button {
 
 <div id="adminBox" class="panel" style="display:none;">
   <h3>👑 Admin Panel</h3>
+
+  <select id="category"></select>
+
   <textarea id="text" placeholder="Write post..."></textarea>
   <input id="image" placeholder="Image URLs (comma separated)">
+
   <button class="primary" onclick="createPost()">Post</button>
+
+  <hr>
+
+  <h4>Create Category</h4>
+  <input id="newCat" placeholder="New category name">
+  <button class="primary" onclick="createCategory()">Add Category</button>
 </div>
 
-<input id="search" placeholder="🔎 Search posts..." oninput="loadPosts()">
+<select id="filter" onchange="loadPosts()">
+  <option value="">All</option>
+</select>
 
 <div id="posts"></div>
 
 </div>
 
-<!-- MODAL -->
-<div id="imgModal" class="modal">
-  <span id="closeModal">&times;</span>
-  <img id="modalImg">
+<!-- 🔍 ZOOM MODAL -->
+<div id="imgModal" style="
+  display:none;
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,0.9);
+  justify-content:center;
+  align-items:center;
+  z-index:9999;
+">
+  <span id="closeModal" style="
+    position:absolute;
+    top:20px;
+    right:30px;
+    font-size:30px;
+    cursor:pointer;
+    color:white;
+  ">&times;</span>
+
+  <img id="modalImg" style="max-width:90%; max-height:90%; border-radius:12px;">
 </div>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, updateDoc }
-from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import {
+  getFirestore,
+  collection,
+  addDoc,
+  getDocs,
+  deleteDoc,
+  doc,
+  updateDoc,
+  query,
+  onSnapshot
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
-import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged }
-from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import {
+  getAuth,
+  signInWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
-/* 🔥 YOUR FIREBASE CONFIG (UNCHANGED) */
+/* 🔥 FIREBASE (UNCHANGED) */
 const firebaseConfig = {
   apiKey: "AIzaSyAlsIWQNJwjhofD07hyrEqSSJCI2uqfBvY",
   authDomain: "gaok-89901.firebaseapp.com",
@@ -186,11 +189,26 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 
-const loginBtn = document.getElementById("loginBtn");
-const adminBox = document.getElementById("adminBox");
-const postsDiv = document.getElementById("posts");
+let currentUser = null;
+let categories = [];
 
-loginBtn.onclick = async () => {
+const catSelect = document.getElementById("category");
+const filterSelect = document.getElementById("filter");
+
+/* AUTH */
+onAuthStateChanged(auth, (user) => {
+  currentUser = user;
+
+  document.getElementById("loginBtn").innerText = user ? "Logout" : "Login";
+
+  document.getElementById("adminBox").style.display =
+    user?.uid === ADMIN_UID ? "block" : "none";
+
+  loadPosts();
+});
+
+/* LOGIN */
+document.getElementById("loginBtn").onclick = async () => {
   if (auth.currentUser) {
     await signOut(auth);
   } else {
@@ -200,14 +218,44 @@ loginBtn.onclick = async () => {
   }
 };
 
-onAuthStateChanged(auth, (user) => {
-  loginBtn.innerText = user ? "Logout" : "Login";
-  adminBox.style.display = user?.uid === ADMIN_UID ? "block" : "none";
-});
+/* CATEGORIES */
+function listenCategories() {
+  const q = query(collection(db, "categories"));
 
+  onSnapshot(q, (snap) => {
+    categories = [];
+
+    snap.forEach(d => {
+      categories.push(d.data().name);
+    });
+
+    renderCats();
+  });
+}
+
+listenCategories();
+
+function renderCats() {
+  catSelect.innerHTML = categories.map(c => `<option>${c}</option>`).join("");
+
+  filterSelect.innerHTML =
+    `<option value="">All</option>` +
+    categories.map(c => `<option value="${c}">${c}</option>`).join("");
+}
+
+/* CREATE CATEGORY */
+window.createCategory = async () => {
+  if (currentUser?.uid !== ADMIN_UID) return;
+
+  const val = document.getElementById("newCat").value.trim();
+  if (!val) return;
+
+  await addDoc(collection(db, "categories"), { name: val });
+};
+
+/* CREATE POST */
 window.createPost = async () => {
-  const user = auth.currentUser;
-  if (!user || user.uid !== ADMIN_UID) return;
+  if (currentUser?.uid !== ADMIN_UID) return;
 
   const images = document.getElementById("image").value
     .split(",")
@@ -217,6 +265,7 @@ window.createPost = async () => {
   await addDoc(collection(db, "posts"), {
     text: document.getElementById("text").value,
     images,
+    category: catSelect.value,
     createdAt: Date.now(),
     likes: 0
   });
@@ -224,57 +273,91 @@ window.createPost = async () => {
   loadPosts();
 };
 
+/* LOAD POSTS */
 window.loadPosts = async () => {
+  const postsDiv = document.getElementById("posts");
   postsDiv.innerHTML = "";
 
-  const search = document.getElementById("search").value.toLowerCase();
   const snap = await getDocs(collection(db, "posts"));
 
   snap.forEach(d => {
     const p = d.data();
-
-    if (search && !p.text.toLowerCase().includes(search)) return;
-
-    const imgs = p.images || (p.image ? [p.image] : []);
-
-    let imgHTML = "";
-    if (imgs.length > 0) {
-      imgHTML = `
-        <div class="img-grid">
-          ${imgs.map(img => `<img src="${img}">`).join("")}
-        </div>
-      `;
-    }
+    const imgs = p.images || [];
+    const isAdmin = currentUser?.uid === ADMIN_UID;
 
     const div = document.createElement("div");
     div.className = "post";
 
     div.innerHTML = `
-      <small>🕒 ${new Date(p.createdAt).toLocaleString()}</small>
+      <small>${new Date(p.createdAt).toLocaleString()}
+      <span class="cat">${p.category || "None"}</span></small>
+
       <p>${p.text}</p>
-      ${imgHTML}
-      <div>❤️ ${p.likes || 0}</div>
+
+      ${imgs.length ? `
+        <div class="img-grid">
+          ${imgs.map(i => `<img src="${i}">`).join("")}
+        </div>
+      ` : ""}
+
+      <div>
+        ❤️ ${p.likes || 0}
+        <button class="like" onclick="likePost('${d.id}', ${p.likes || 0})">Like</button>
+
+        ${isAdmin ? `
+          <button class="edit" onclick="editPost('${d.id}')">Edit</button>
+          <button class="danger" onclick="deletePost('${d.id}')">Delete</button>
+          <button class="primary" onclick="setCategory('${d.id}')">Set Category</button>
+        ` : ""}
+      </div>
     `;
 
     postsDiv.appendChild(div);
   });
 };
 
-/* ZOOM */
+/* ACTIONS */
+window.likePost = async (id, likes) => {
+  await updateDoc(doc(db, "posts", id), { likes: likes + 1 });
+  loadPosts();
+};
+
+window.deletePost = async (id) => {
+  await deleteDoc(doc(db, "posts", id));
+  loadPosts();
+};
+
+window.editPost = async (id) => {
+  const text = prompt("Edit:");
+  if (!text) return;
+  await updateDoc(doc(db, "posts", id), { text });
+  loadPosts();
+};
+
+window.setCategory = async (id) => {
+  const cat = prompt("Category:");
+  if (!cat) return;
+  await updateDoc(doc(db, "posts", id), { category: cat });
+  loadPosts();
+};
+
+/* 🔍 ZOOM */
 const modal = document.getElementById("imgModal");
 const modalImg = document.getElementById("modalImg");
-const closeModal = document.getElementById("closeModal");
 
 document.addEventListener("click", (e) => {
   if (e.target.tagName === "IMG" && e.target.closest(".img-grid")) {
-    modal.classList.add("show");
+    modal.style.display = "flex";
     modalImg.src = e.target.src;
   }
 });
 
-closeModal.onclick = () => modal.classList.remove("show");
+document.getElementById("closeModal").onclick = () => {
+  modal.style.display = "none";
+};
+
 modal.onclick = (e) => {
-  if (e.target === modal) modal.classList.remove("show");
+  if (e.target === modal) modal.style.display = "none";
 };
 
 loadPosts();
