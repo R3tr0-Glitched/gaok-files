@@ -105,29 +105,27 @@ button {
 
 <div class="container">
 
-<div id="adminBox" class="panel" style="display:none;">
-  <h3>👑 Admin Panel</h3>
+  <div id="adminBox" class="panel" style="display:none;">
+    <h3>👑 Admin Panel</h3>
 
-  <select id="category"></select>
+    <select id="category"></select>
+    <textarea id="text" placeholder="Write post..."></textarea>
+    <input id="image" placeholder="Image URLs (comma separated)">
 
-  <textarea id="text" placeholder="Write post..."></textarea>
-  <input id="image" placeholder="Image URLs (comma separated)">
+    <button class="primary" onclick="createPost()">Post</button>
 
-  <button class="primary" onclick="createPost()">Post</button>
+    <hr>
 
-  <hr>
+    <h4>Create Category</h4>
+    <input id="newCat" placeholder="New category name">
+    <button class="primary" onclick="createCategory()">Add Category</button>
+  </div>
 
-  <h4>Create Category</h4>
-  <input id="newCat" placeholder="New category name">
-  <button class="primary" onclick="createCategory()">Add Category</button>
-</div>
+  <select id="filter" onchange="loadPosts()">
+    <option value="">All</option>
+  </select>
 
-<select id="filter" onchange="loadPosts()">
-  <option value="">All</option>
-</select>
-
-<div id="posts"></div>
-
+  <div id="posts"></div>
 </div>
 
 <!-- ZOOM -->
@@ -172,7 +170,7 @@ import {
   onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
-/* FIREBASE (UNCHANGED) */
+/* FIREBASE */
 const firebaseConfig = {
   apiKey: "AIzaSyAlsIWQNJwjhofD07hyrEqSSJCI2uqfBvY",
   authDomain: "gaok-89901.firebaseapp.com",
@@ -204,7 +202,7 @@ onAuthStateChanged(auth, (user) => {
   document.getElementById("loginBtn").innerText = user ? "Logout" : "Login";
 
   document.getElementById("adminBox").style.display =
-    user?.uid === ADMIN_UID ? "block" : "none";
+    user && ADMIN_UIDS.includes(user.uid) ? "block" : "none";
 });
 
 /* LOGIN */
@@ -230,7 +228,7 @@ onSnapshot(query(collection(db, "categories")), (snap) => {
 
 /* CREATE CATEGORY */
 window.createCategory = async () => {
-  if (currentUser?.uid !== ADMIN_UID) return;
+  if (!ADMIN_UIDS.includes(currentUser?.uid)) return;
 
   const val = document.getElementById("newCat").value.trim();
   if (!val) return;
@@ -240,7 +238,7 @@ window.createCategory = async () => {
 
 /* CREATE POST */
 window.createPost = async () => {
-  if (currentUser?.uid !== ADMIN_UID) return;
+  if (!ADMIN_UIDS.includes(currentUser?.uid)) return;
 
   const images = document.getElementById("image").value
     .split(",")
@@ -256,7 +254,7 @@ window.createPost = async () => {
   });
 };
 
-/* 🔥 REAL-TIME POSTS (FIXED) */
+/* POSTS */
 const postsDiv = document.getElementById("posts");
 
 onSnapshot(query(collection(db, "posts")), (snap) => {
@@ -267,14 +265,16 @@ onSnapshot(query(collection(db, "posts")), (snap) => {
 
   posts.forEach(p => {
     const imgs = p.images || [];
-    const isAdmin = currentUser?.uid === ADMIN_UID;
+    const isAdmin = ADMIN_UIDS.includes(currentUser?.uid);
 
     const div = document.createElement("div");
     div.className = "post";
 
     div.innerHTML = `
-      <small>${new Date(p.createdAt).toLocaleString()}
-      <span class="cat">${p.category || "None"}</span></small>
+      <small>
+        ${new Date(p.createdAt).toLocaleString()}
+        <span class="cat">${p.category || "None"}</span>
+      </small>
 
       <p>${p.text}</p>
 
@@ -321,7 +321,7 @@ window.setCategory = async (id) => {
   await updateDoc(doc(db, "posts", id), { category: cat });
 };
 
-/* ZOOM FIX */
+/* ZOOM */
 const modal = document.getElementById("imgModal");
 const modalImg = document.getElementById("modalImg");
 
