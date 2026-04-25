@@ -3,85 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <title>Retro Forum</title>
-
-<style>
-body {
-  margin: 0;
-  font-family: system-ui;
-  background: #0f1115;
-  color: #e6e6e6;
-}
-
-header {
-  padding: 14px 18px;
-  background: #151821;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border-bottom: 1px solid #232634;
-}
-
-.container {
-  max-width: 760px;
-  margin: auto;
-  padding: 20px;
-}
-
-.post {
-  background: #171a22;
-  border: 1px solid #232634;
-  padding: 14px;
-  border-radius: 14px;
-  margin-bottom: 12px;
-}
-
-.post small {
-  opacity: 0.6;
-}
-
-.post img {
-  width: 100%;
-  margin-top: 10px;
-  border-radius: 10px;
-}
-
-.panel {
-  background: #171a22;
-  border: 1px solid #232634;
-  padding: 14px;
-  border-radius: 14px;
-  margin-bottom: 15px;
-}
-
-input, textarea {
-  width: 100%;
-  margin-top: 10px;
-  padding: 10px;
-  border-radius: 10px;
-  border: 1px solid #2a2f3d;
-  background: #0f1115;
-  color: white;
-}
-
-button {
-  padding: 7px 10px;
-  border-radius: 10px;
-  border: none;
-  cursor: pointer;
-  margin-top: 8px;
-  margin-right: 5px;
-}
-
-.primary { background: #5865f2; color: white; }
-.danger { background: #e04848; color: white; }
-.edit { background: #f6a200; color: black; }
-.like { background: #2a2f3d; color: white; }
-
-#search {
-  width: 100%;
-  margin-bottom: 15px;
-}
-</style>
+<link rel="stylesheet" href="styles.css">
 </head>
 
 <body>
@@ -89,145 +11,26 @@ button {
 <header>
   <div>
     <strong>💬 Retro Forum</strong><br>
-    <small style="opacity:0.5">clean community feed</small>
+    <small class="sub">clean community feed</small>
   </div>
-  <button id="loginBtn" class="like">Login</button>
+  <button id="loginBtn">Login</button>
 </header>
 
 <div class="container">
 
-<div id="adminBox" class="panel" style="display:none;">
-  <h3>👑 Admin Panel</h3>
+<div id="adminBox" class="panel hidden">
+  <h3>Admin Panel</h3>
   <textarea id="text" placeholder="Write post..."></textarea>
-  <input id="image" placeholder="Image URL (optional)">
-  <button class="primary" onclick="createPost()">Post</button>
+  <input id="image" placeholder="Image URL">
+  <button id="postBtn">Post</button>
 </div>
 
-<input id="search" placeholder="🔎 Search posts..." oninput="loadPosts()">
+<input id="search" placeholder="Search..." />
 
 <div id="posts"></div>
 
 </div>
 
-<script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, updateDoc } 
-from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-
-import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } 
-from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-
-const firebaseConfig = {
-  apiKey: "AIzaSyAlsIWQNJwjhofD07hyrEqSSJCI2uqfBvY",
-  authDomain: "gaok-89901.firebaseapp.com",
-  projectId: "gaok-89901",
-  storageBucket: "gaok-89901.firebasestorage.app",
-  messagingSenderId: "287365042202",
-  appId: "1:287365042202:web:1c0dc4a94b37f395d981a3"
-};
-
-const ADMIN_UID = "wOtvS062McPzHF5CpR1p9Loh4QW2";
-
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-const auth = getAuth(app);
-
-const loginBtn = document.getElementById("loginBtn");
-const adminBox = document.getElementById("adminBox");
-const postsDiv = document.getElementById("posts");
-
-loginBtn.onclick = async () => {
-  if (auth.currentUser) {
-    await signOut(auth);
-  } else {
-    const email = prompt("Email:");
-    const pass = prompt("Password:");
-    await signInWithEmailAndPassword(auth, email, pass);
-  }
-};
-
-onAuthStateChanged(auth, (user) => {
-  loginBtn.innerText = user ? "Logout" : "Login";
-
-  if (user?.uid === ADMIN_UID) {
-    adminBox.style.display = "block";
-  } else {
-    adminBox.style.display = "none";
-  }
-});
-
-window.createPost = async () => {
-  const user = auth.currentUser;
-  if (!user || user.uid !== ADMIN_UID) return;
-
-  await addDoc(collection(db, "posts"), {
-    text: document.getElementById("text").value,
-    image: document.getElementById("image").value,
-    createdAt: Date.now(),
-    likes: 0
-  });
-
-  loadPosts();
-};
-
-window.loadPosts = async () => {
-  postsDiv.innerHTML = "";
-
-  const search = document.getElementById("search").value.toLowerCase();
-
-  const snap = await getDocs(collection(db, "posts"));
-
-  snap.forEach(d => {
-    const p = d.data();
-
-    if (search && !p.text.toLowerCase().includes(search)) return;
-
-    const div = document.createElement("div");
-    div.className = "post";
-
-    div.innerHTML = `
-      <small>👤 ${p.user || "unknown"} • 🕒 ${new Date(p.createdAt).toLocaleString()}</small>
-      <p>${p.text}</p>
-      ${p.image ? `<img src="${p.image}">` : ""}
-
-      <div>
-        ❤️ ${p.likes || 0}
-
-        <button class="like" onclick="likePost('${d.id}', ${p.likes || 0})">Like</button>
-
-        ${auth.currentUser?.uid === ADMIN_UID ? `
-          <button class="edit" onclick="editPost('${d.id}')">Edit</button>
-          <button class="danger" onclick="deletePost('${d.id}')">Delete</button>
-        ` : ""}
-      </div>
-    `;
-
-    postsDiv.appendChild(div);
-  });
-};
-
-window.likePost = async (id, likes) => {
-  await updateDoc(doc(db, "posts", id), {
-    likes: likes + 1
-  });
-  loadPosts();
-};
-
-window.deletePost = async (id) => {
-  await deleteDoc(doc(db, "posts", id));
-  loadPosts();
-};
-
-window.editPost = async (id) => {
-  const newText = prompt("Edit post:");
-  await updateDoc(doc(db, "posts", id), {
-    text: newText
-  });
-  loadPosts();
-};
-
-loadPosts();
-</script>
-
+<script type="module" src="app.js"></script>
 </body>
 </html>
